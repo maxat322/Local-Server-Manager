@@ -1,214 +1,218 @@
 # Local Server Manager
 
-Запуск и контроль локальных серверов разработки из трея. Добавляете папку репозитория,
-приложение само находит, чем поднимать сервер, а дальше серверы запускаются, перезапускаются
-и останавливаются с главного экрана или из меню значка возле часов.
+**English** · [Русский](README.ru.md)
 
-Младший брат [Mega Panel](../Mega%20Panel): та же тёмная тема, те же приёмы интерфейса.
+Start and control local development servers from the system tray. Add a repository folder,
+the app finds what can start its server, and then you start, restart and stop servers from the
+main screen or from the tray icon menu next to the clock.
 
 ```bash
-npm install          # один раз
-npm run tauri dev    # приложение с горячей перезагрузкой интерфейса
-npm run tauri build  # установщик в src-tauri/target/release/bundle/nsis
+npm install          # once
+npm run tauri dev    # the app with hot reload of the interface
+npm run tauri build  # installer in src-tauri/target/release/bundle/nsis
 ```
 
-Нужны Node 20+, Rust (toolchain `msvc`) и Visual Studio C++ Build Tools. WebView2 в Windows 11 уже есть.
+You need Node 20+, Rust (the `msvc` toolchain) and Visual Studio C++ Build Tools. WebView2 is
+already present on Windows 11.
 
-## Как пользоваться
+## How to use it
 
-1. **Добавить** → выбрать папку репозитория. Приложение покажет найденные способы запуска
-   и заранее отметит лучший.
-2. При необходимости отметить несколько (например, `web` и `api` отдельно), указать файл
-   запуска вручную или вписать свою команду.
-3. Репозиторий появляется на главной со статусом и тремя кнопками. Первая меняется по состоянию:
-   запустить (зелёная) у остановленного, пауза (синяя) у работающего, продолжить (зелёная)
-   у приостановленного. Дальше перезапустить (жёлтая) и остановить (красная).
-   Клик по строке открывает терминал сервера.
+1. **Add** → choose a repository folder. The app shows the launch methods it found and marks the
+   best one in advance.
+2. If needed, select several (for example `web` and `api` separately), point to a launch file
+   manually, or enter your own command.
+3. The repository appears on the main screen with a status and three buttons. The first one changes
+   with the state: start (green) when stopped, pause (blue) when running, resume (green) when paused.
+   Then restart (amber) and stop (red). Clicking the row opens the server's terminal.
 
-Число работающих серверов видно, не открывая окно: значок в трее сам превращается в это число,
-а на кнопке приложения в панели задач появляется зелёный кружок-счётчик. Серверы на паузе
-в счёт не входят. Больше девяти показывается как «9+».
+The number of running servers is visible without opening the window: the tray icon turns into that
+number, and the app's taskbar button gets a green count badge. Servers on pause are not counted.
+Numbers above nine are shown as "9+".
 
-Закрытие окна сворачивает приложение в трей, серверы продолжают работать. Левый клик по значку
-открывает окно, правый — меню: каждый сервер с галочкой «работает», «Запустить все»,
-«Остановить все», «Выход».
+Closing the window moves the app to the tray; the servers keep running. A left click on the icon
+opens the window, a right click opens the menu: each server with a "running" checkmark,
+"Start all", "Stop all", "Exit".
 
-## Встроенный терминал
+## Built-in terminal
 
-Каждый сервер — npm-скрипт, `.cmd`, `.bat`, `.ps1` или своя команда — запускается в настоящей
-псевдоконсоли Windows (ConPTY), только без отдельного окна. Панель внизу главной показывает её
-так же, как показало бы окно консоли:
+Each server — an npm script, `.cmd`, `.bat`, `.ps1` or a custom command — runs in a real Windows
+pseudoconsole (ConPTY), just without a separate window. The panel at the bottom of the main screen
+shows it the same way a console window would:
 
-- процесс видит терминал, поэтому инструменты рисуют цвета и индикаторы прогресса;
-- в терминал можно печатать: ответить на вопрос скрипта, нажать клавишу на `pause`;
-- Ctrl+C прерывает сервер, как в обычной консоли. Пакетный файл после этого спросит
-  «Завершить выполнение пакетного файла (Y/N)?» — это вопрос самого `cmd`, на него нужно ответить;
-- Ctrl+C при выделенном тексте копирует его, Ctrl+V вставляет;
-- вывод прошлых запусков остаётся в прокрутке, каждый запуск отмечен строкой «▸ Запуск: …».
+- the process sees a terminal, so tools draw colors and progress indicators;
+- you can type into the terminal: answer a script's question, press a key on `pause`;
+- Ctrl+C interrupts the server, as in a normal console. After that a batch file asks
+  "Terminate batch job (Y/N)?" — this is `cmd`'s own question and needs an answer;
+- Ctrl+C with text selected copies it, Ctrl+V pastes;
+- output from previous runs stays in the scrollback, and each run is marked with a "▸ Start: …" line.
 
-Терминал можно закрыть: сервер продолжит работать, а при повторном открытии экран восстановится.
+You can close the terminal: the server keeps running, and the screen is restored when you reopen it.
 
-### Скрипты, которые открывают своё окно
+### Scripts that open their own window
 
-Если пакетный файл запускает сервер командой `start "Заголовок" cmd /k …`, Windows открывает для
-него новое окно консоли, и перехватить это снаружи нельзя: так велит сам файл. Сервер остаётся
-под контролем приложения (порт виден, остановка работает), но его вывод уходит в то окно.
+If a batch file starts the server with `start "Title" cmd /k …`, Windows opens a new console window
+for it, and this cannot be intercepted from outside: the file itself asks for it. The server stays
+under the app's control (its port is visible, stopping works), but its output goes to that window.
 
-Сканер такие файлы замечает. В списке способов запуска у файла стоит предупреждение, а прямо
-над ним предлагается команда, которую файл прячет в `start`: запущенная напрямую, она идёт
-во встроенный терминал. `start /b` и `start` с адресом сайта окна консоли не открывают и
-предупреждения не вызывают.
+The scanner detects such files. In the list of launch methods the file gets a warning, and right
+above it the app offers the command that the file hides inside `start`: run directly, it goes to the
+built-in terminal. `start /b` and `start` with a website address do not open a console window and
+do not trigger the warning.
 
-## Пауза
+## Pause
 
-Сервер можно не останавливать, а заморозить: все его процессы перестают получать процессорное
-время, а их память вытесняется в файл подкачки. При продолжении сервер идёт дальше с того же
-места, ничего не пересобирая: это тот же процесс, а не новый запуск.
+A server can be frozen instead of stopped: all its processes stop receiving CPU time, and their
+memory is pushed out to the page file. On resume the server continues from the same point without
+rebuilding anything: it is the same process, not a new start.
 
-Что стоит помнить:
+Keep in mind:
 
-- порт на паузе остаётся занят, а запрос к серверу не получает отказ, а ждёт продолжения;
-- наблюдатель за файлами заморожен вместе с сервером и может не заметить правки, сделанные
-  на паузе: тогда файл нужно пересохранить или сервер перезапустить;
-- долгая пауза может оборвать соединения с базой или внешним API по таймауту на той стороне;
-- память освобождается физическая, место в файле подкачки остаётся занятым.
+- the port stays occupied while paused, and requests to the server are not refused — they wait for
+  the resume;
+- the file watcher is frozen together with the server and may miss edits made during the pause: then
+  save the file again or restart the server;
+- a long pause can cause connections to a database or external API to drop on the other side due to
+  their timeouts;
+- physical memory is released, but the space in the page file stays in use.
 
-Пауза недоступна, пока сервер только запускается. Приостановленный сервер можно остановить
-и перезапустить обычными кнопками.
+Pause is not available while the server is still starting. A paused server can be stopped and
+restarted with the regular buttons.
 
-## Порты
+## Ports
 
-Вторая вкладка — память о портах: какие номера уже заняты на этой машине и кем. Нужна, чтобы
-новому проекту выбрать порт, который не пересечётся ни с работающим, ни с тем, что обычно
-работает, но сейчас выключено.
+The second tab is a memory of ports: which port numbers have been used on this machine and by whom.
+It helps you pick a port for a new project that will not clash with a running server, or with one
+that usually runs but is currently off.
 
-- Запоминаются порты, которые слушала любая программа, пока приложение запущено: и серверы
-  менеджера (с названием проекта), и запущенное мимо него (с именем программы).
-- Закрытый порт из списка не пропадает: видно, когда он был открыт в последний раз.
-- Поиск по номеру, программе или проекту. На запрос-число вкладка отвечает прямо:
-  «не встречался, можно брать», «занят сейчас» или «свободен, но его занимал такой-то проект».
-- Временные порты Windows (от 49152) пропускаются: система раздаёт их случайно.
+- Every port that any program listened on while the app was running is remembered: both servers
+  started by the manager (with the project name) and anything started outside it (with the program name).
+- A closed port stays in the list: you can see when it was last open.
+- Search by number, program or project. For a numeric query the tab answers directly: "never used,
+  free to take", "in use now", or "free, but last used by such-and-such project".
+- Windows dynamic ports (from 49152 up) are skipped, because the system hands them out at random.
 
-Память лежит в `ports.json` рядом с настройками. Запись можно убрать кнопкой «Забыть».
+The memory is stored in `ports.json` next to the settings. You can remove an entry with "Forget".
 
-## Что считается способом запуска
+## What counts as a launch method
 
-| Источник | Что находится |
+| Source | What is found |
 |---|---|
-| `package.json` в корне | все скрипты; `dev`, `start`, `serve`, `dev:*`, `start:*` выше остальных |
-| `package.json` в подпапках | то же для `web/`, `server/`, `frontend/` и пакетов в `apps/*`, `packages/*`, `services/*` |
-| файлы в корне | `*.cmd`, `*.bat`, `*.ps1`; имена со `start`, `run`, `dev`, `local` выше, со `stop`, `install`, `build` ниже |
-| вручную | любой файл (`.cmd`, `.bat`, `.ps1`, `.exe`, `.js`, `.py`) или произвольная команда |
+| `package.json` in the root | all scripts; `dev`, `start`, `serve`, `dev:*`, `start:*` rank highest |
+| `package.json` in subfolders | the same for `web/`, `server/`, `frontend/` and packages in `apps/*`, `packages/*`, `services/*` |
+| files in the root | `*.cmd`, `*.bat`, `*.ps1`; names with `start`, `run`, `dev`, `local` rank higher, with `stop`, `install`, `build` lower |
+| manual | any file (`.cmd`, `.bat`, `.ps1`, `.exe`, `.js`, `.py`) or an arbitrary command |
 
-Менеджер пакетов определяется по полю `packageManager`, затем по lock-файлам
-(`pnpm-lock.yaml` → `yarn.lock` → `bun.lockb` → `package-lock.json`). Пакет внутри монорепозитория
-наследует менеджер корня. Сканирование только читает файлы и ничего не выполняет.
+The package manager is detected from the `packageManager` field, then from lock files
+(`pnpm-lock.yaml` → `yarn.lock` → `bun.lockb` → `package-lock.json`). A package inside a monorepo
+inherits the root's package manager. Scanning only reads files and never runs anything.
 
-## Как устроены запуск и остановка
+## How starting and stopping work
 
-Дев-сервер почти никогда не один процесс: `start-local.cmd` поднимает `node`, тот `concurrently`,
-а он ещё несколько `node`. Если убить корневой `cmd.exe`, потомки останутся работать и держать порты.
+A dev server is almost never a single process: `start-local.cmd` starts `node`, which starts
+`concurrently`, which starts several more `node` processes. If you kill the root `cmd.exe`, the
+children keep running and hold their ports.
 
-Поэтому каждый сервер запускается внутри **Job Object** Windows. Процесс создаётся приостановленным,
-привязывается к заданию и только потом возобновляется, так что ни один потомок не рождается вне него.
-«Остановить» завершает задание целиком: гибнет всё дерево, включая окна, поднятые через `start`.
+So each server runs inside a Windows **Job Object**. The process is created suspended, attached to
+the job, and only then resumed, so no child is ever born outside it. "Stop" terminates the whole job:
+the entire tree dies, including windows opened through `start`.
 
-Из этого следует несколько вещей, о которых стоит знать:
+A few consequences worth knowing:
 
-- **Серверы живут, пока живёт приложение.** Задание создаётся с `KILL_ON_JOB_CLOSE`: при выходе
-  и даже при аварийном завершении приложения система сама гасит все серверы. Осиротевших `node.exe`
-  не остаётся. Закрытие окна серверы не трогает, а «Выход» спрашивает подтверждение, если что-то работает.
-- **Кнопка «Остановить» жёсткая.** Она завершает процессы сразу, не давая им прибраться.
-  Если серверу нужно завершиться аккуратно, нажмите Ctrl+C в его терминале.
-- **Контейнеры переживают остановку.** `docker compose up -d` отдаёт работу демону Docker, который
-  в задание не входит. Такие сервисы останавливайте своим скриптом.
-- **Браузер, открытый скриптом, может закрыться вместе с сервером.** Если скрипт делает
-  `start http://localhost:…`, а браузер до этого не был запущен, его процесс окажется в том же задании.
-  При уже открытом браузере этого не происходит.
-- **`pause` ждёт клавишу.** Скрипт с `pause` в конце останется в статусе «работает», пока
-  в его терминале не нажмут клавишу: так же, как он держал бы открытым окно консоли.
+- **Servers live as long as the app does.** The job is created with `KILL_ON_JOB_CLOSE`: when the app
+  exits, even if it crashes, the system stops all its servers. No orphaned `node.exe` processes are
+  left behind. Closing the window does not touch the servers, and "Exit" asks for confirmation if
+  anything is running.
+- **The "Stop" button is forceful.** It kills the processes immediately without giving them a chance
+  to clean up. If a server should shut down gracefully, press Ctrl+C in its terminal.
+- **Containers survive a stop.** `docker compose up -d` hands the work to the Docker daemon, which is
+  not part of the job. Stop such services with your own script.
+- **A browser opened by a script may close together with the server.** If a script runs
+  `start http://localhost:…` and the browser was not running before, its process ends up in the same
+  job. If the browser was already open, this does not happen.
+- **`pause` waits for a key.** A script that ends with `pause` stays in the "running" status until a
+  key is pressed in its terminal — just as it would keep a console window open.
 
-### Статусы
+### Statuses
 
-| Статус | Когда |
+| Status | When |
 |---|---|
-| запускается | процесс создан, порт ещё никто не слушает |
-| работает | кто-то из процессов сервера начал слушать TCP-порт, либо прошло 10 секунд (для процессов без порта) |
-| на паузе | процессы заморожены кнопкой «пауза» |
-| остановлен | остановлен кнопкой или прерван Ctrl+C в терминале |
-| вышел сам | завершился сам с кодом 0: не ошибка, но сервер не работает |
-| упал | завершился сам с ненулевым кодом; приходит уведомление Windows |
+| starting | the process is created, nothing is listening on a port yet |
+| running | one of the server's processes is listening on a TCP port, or 10 seconds have passed (for processes without a port) |
+| paused | processes were frozen with the pause button |
+| stopped | stopped with the button, or interrupted with Ctrl+C in the terminal |
+| exited | ended on its own with code 0: not an error, but the server is not running |
+| crashed | ended on its own with a non-zero code; a Windows notification is shown |
 
-Когда процесс завершается сам, под названием сервера вместо команды показывается строка его
-вывода, похожая на причину («порт занят», `EADDRINUSE`, `not found`), а если такой нет — последняя.
-Если это случилось в первые 20 секунд после запуска, терминал сервера открывается сам.
+When a process ends on its own, the server's name is replaced by a line of its output that looks like
+the reason ("port in use", `EADDRINUSE`, `not found`); if there is none, the last line is shown.
+If this happens within 20 seconds of starting, the server's terminal opens by itself.
 
-Типичный случай «вышел сам»: сервер уже запущен где-то ещё и держит порт. Вторая копия видит,
-что порт занят, сообщает об этом и завершается с кодом 0. Менеджер управляет только теми
-процессами, которые запустил сам, поэтому чужую копию сначала нужно остановить там, где она запущена.
+A typical "exited" case: the server is already running somewhere else and holds the port. The second
+copy sees the port is busy, reports it and exits with code 0. The manager only controls processes it
+started itself, so the other copy has to be stopped where it is running.
 
-Сервер считается работающим, пока в его задании жив хоть один процесс, даже если корневой
-скрипт уже вышел: так ведут себя скрипты, которые поднимают сервер через `start` и завершаются.
+A server counts as running as long as at least one process in its job is alive, even if the root
+script has already exited: this is how scripts behave when they start the server with `start` and
+then finish.
 
-Адрес для кнопки-ссылки берётся из вывода (первый `http://localhost:…`), а если его там нет,
-по слушающему порту. Его можно задать вручную в правке репозитория.
+The address for the link button is taken from the output (the first `http://localhost:…`); if there is
+none, from the listening port. You can also set it manually in the repository's settings.
 
-## Из чего состоит
+## Project structure
 
 ```
-src/                     интерфейс: React + Vite, JSX
-  App.jsx                каркас, диалоги, действия
-  ipc.js                 вызовы ядра и подписка на события
-  mock.js                заглушка ядра для вёрстки в браузере, в сборку не попадает
-  components/            экраны и диалоги; TerminalPanel.jsx — терминал на xterm.js
+src/                     interface: React + Vite, JSX
+  App.jsx                layout, dialogs, actions
+  ipc.js                 calls to the core and event subscriptions
+  mock.js                core stub for UI work in a browser, not included in the build
+  components/            screens and dialogs; TerminalPanel.jsx — the terminal on xterm.js
 src-tauri/
-  src/                   оболочка: окно, трей, команды для интерфейса
+  src/                   shell: window, tray, commands for the interface
     lib.rs  commands.rs  tray.rs
-  core/                  ядро, от Tauri не зависит
-    src/config.rs        настройки и список репозиториев
-    src/scan.rs          поиск способов запуска
+  core/                  the core, independent of Tauri
+    src/config.rs        settings and the repository list
+    src/scan.rs          finding launch methods
     src/job.rs           Job Object
-    src/freeze.rs        пауза: заморозка процессов задания
-    src/badge.rs         число работающих серверов картинкой
-    src/pty.rs           псевдоконсоль ConPTY
-    src/runner.rs        запуск, статусы, вывод терминала
-    src/ports.rs         слушающие порты и имена программ
-    src/portbook.rs      память о портах
-    src/text.rs          разбор вывода: адрес сервера, причина завершения
+    src/freeze.rs        pause: freezing the job's processes
+    src/badge.rs         the running-server count as an image
+    src/pty.rs           ConPTY pseudoconsole
+    src/runner.rs        starting, statuses, terminal output
+    src/ports.rs         listening ports and program names
+    src/portbook.rs      port memory
+    src/text.rs          output parsing: server address, exit reason
 ```
 
-Ядро вынесено в отдельный крейт намеренно: оно проверяется тестами на настоящих процессах
-без сборки оболочки.
+The core lives in a separate crate on purpose: it is tested with real processes without building the
+shell.
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml -p lsm-core
 ```
 
-Тесты поднимают `cmd`, `powershell` и `node` и проверяют, что остановка убивает всё дерево,
-что порт освобождается, что процесс видит настоящий терминал, что `pause` ждёт клавишу,
-а набранный текст доходит до скрипта. Нужен `node` в `PATH`.
+The tests start `cmd`, `powershell` and `node` and check that stopping kills the whole tree, that the
+port is released, that a process sees a real terminal, that `pause` waits for a key, and that typed
+text reaches the script. `node` must be on `PATH`.
 
-## Настройки
+## Settings
 
-Лежат в `%APPDATA%\com.localservermanager.app\config.json`: список репозиториев и параметры
-приложения. Пишутся через временный файл. Если файл не прочитался, он не затирается, а откладывается
-рядом как `config.json.bad`.
+They are stored in `%APPDATA%\com.localservermanager.app\config.json`: the repository list and the app
+options. The file is written through a temporary file. If it cannot be read, it is not overwritten but
+moved aside as `config.json.bad`.
 
-Вывод терминала хранится в памяти (по умолчанию 5000 строк прокрутки на сервер) и на диск
-не пишется.
+Terminal output is kept in memory (5000 scrollback lines per server by default) and is not written to disk.
 
-Переменная `LSM_DATA_DIR` подменяет папку настроек: удобно, чтобы запустить приложение
-на чистом списке и не трогать рабочий.
+The `LSM_DATA_DIR` variable replaces the settings folder: handy for starting the app with an empty list
+without touching your real one.
 
-## Вёрстка без ядра
+## Interface without the core
 
-`npm run dev` открывает интерфейс в обычном браузере на `http://localhost:1430`. Ядра там нет,
-поэтому подставляется заглушка `src/mock.js` с выдуманными серверами: видно все состояния экрана,
-но ничего не запускается.
+`npm run dev` opens the interface in a regular browser at `http://localhost:1430`. There is no core
+there, so the stub `src/mock.js` with made-up servers is used: all screen states are visible, but
+nothing is started.
 
-## Чего пока нет
+## Not yet
 
-- Своей команды остановки для сервера (например, для контейнеров Docker).
-- Нескольких терминалов на экране сразу: открыт терминал одного сервера.
-- Запуска `.sh` и работы вне Windows.
-- Порядка репозиториев: они идут в том порядке, в каком добавлены.
+- A custom stop command for a server (for example, for Docker containers).
+- Several terminals on screen at once: one server's terminal is open at a time.
+- Running `.sh` scripts and working outside Windows.
+- Custom ordering of repositories: they are listed in the order they were added.

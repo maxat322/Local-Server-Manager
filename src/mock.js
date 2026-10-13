@@ -18,7 +18,7 @@ const launcher = (title, kind, command, cwd, extra = {}) => ({
   id: newId(), title, kind, command, cwd, url: null, autostart: false, ...extra,
 })
 
-const DEV = 'C:\\Users\\designer\\Desktop\\Dev\\'
+const DEV = 'C:\\Dev\\'
 const config = {
   settings: {
     accent: 'mint', launchWithWindows: false, startHidden: true, closeToTray: true, notifyOnCrash: true, logLines: 5000,
@@ -161,7 +161,7 @@ let nextPort = 5173
 const handlers = {
   get_config: () => copy(config),
   get_procs: () => Object.values(procs),
-  app_info: () => ({ version: '0.1.0', dataDir: 'C:\\Users\\designer\\AppData\\Roaming\\com.localservermanager.app', loadError: null }),
+  app_info: () => ({ version: '0.1.0', dataDir: 'C:\\Users\\you\\AppData\\Roaming\\com.localservermanager.app', loadError: null }),
   scan_folder: () => copy(SCAN),
   add_project: ({ project }) => {
     config.projects.push({ ...project, id: newId(), launchers: project.launchers.map(l => ({ ...l, id: newId() })) })
