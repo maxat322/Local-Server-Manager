@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Local Server Manager",
+  "version": "0.3.1",
+  "identifier": "com.localservermanager.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1430",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Local Server Manager",
+        "width": 1080,
+        "height": 720,
+        "minWidth": 900,
+        "minHeight": 480,
+        "resizable": true,
+        "visible": false,
+        "center": true,
+        "theme": "Dark",
+        "backgroundColor": "#0a0c0d"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "Локальные серверы разработки из трея",
+    "longDescription": "Local Server Manager: запуск, перезапуск и остановка локальных серверов разработки."
+  }
+}

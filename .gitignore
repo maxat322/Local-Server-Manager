@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-release/
+src-tauri/target/
+src-tauri/gen/
+*.local
+.vscode/
+.idea/
+Thumbs.db
