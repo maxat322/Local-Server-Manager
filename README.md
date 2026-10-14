@@ -33,6 +33,56 @@ Closing the window moves the app to the tray; the servers keep running. A left c
 opens the window, a right click opens the menu: each server with a "running" checkmark,
 "Start all", "Stop all", "Exit".
 
+## Started outside the manager
+
+A server from the list can run without the manager: it was started from your own terminal, by
+double-clicking a `.bat`, or it was left over from an earlier session. Such a run holds the port,
+and a start from the manager then exits right away with "port in use".
+
+The manager notices these runs. The server's row gets a violet ring indicator, the status
+"вне менеджера" (outside the manager), the address of the port it holds, and the program with its
+process ID (the tooltip shows the command line and all ports). The list header gets an
+"ВНЕ МЕНЕДЖЕРА" counter.
+
+- **Stop** ends that run entirely: the top process and all its children.
+- **Restart** ends it, waits for the ports to be released, and starts the server in the manager,
+  with the built-in terminal and buttons.
+- **Start** is disabled: a second copy would hit the same port. "Start all" and autostart skip such
+  servers.
+
+A process counts as an outside run if it listens on a TCP port and the repository or launch folder
+appears in its program path, command line or working directory. The port is required: editors and
+language servers also run from the project folder, but they do not listen on ports. Editors,
+terminals and browsers are never considered. A run is the chain of processes going up from the
+server while their command line contains the same folder: so `cmd /c start-local.cmd` above `node`
+is stopped together with it, while the terminal everything was started from stays open.
+
+Detection runs every four seconds and only while the window is open. The resource usage of such a
+server is shown on its line just like for one started from the manager.
+
+## Resource usage
+
+A repository that has something running shows how much it uses right now, on the same line as its
+address and status, for example `CPU 3%  RAM 5% 1.6ГБ  GPU 0% 0МБ`:
+
+| Figure | What it is |
+|---|---|
+| CPU | share of all the machine's cores, as in Task Manager |
+| RAM | share of installed memory and the amount used by all the server's processes (working set) |
+| GPU | graphics card load (the busiest engine: 3D, compute, video encoding) and dedicated video memory |
+
+Percentages are rounded to whole numbers. In a narrow window the CPU, RAM and GPU labels move into
+the tooltip; the order of the figures stays the same.
+
+The whole process tree of a server is counted, and for a repository with several launch methods the
+figures are the sum of them all. A server started outside the manager counts too: its processes are
+measured one by one, so the line shows for it as well. They refresh every two seconds and only while the window is open:
+in the tray the app takes no measurements.
+
+On pause the CPU and GPU show zero and RAM drops to almost zero, but video memory stays in use:
+pausing does not release it. The GPU counters come from Windows itself, so they work with a card
+from any vendor; if the system has no such counters, zeros are shown.
+
 ## Built-in terminal
 
 Each server — an npm script, `.cmd`, `.bat`, `.ps1` or a custom command — runs in a real Windows
@@ -177,6 +227,8 @@ src-tauri/
     src/badge.rs         the running-server count as an image
     src/pty.rs           ConPTY pseudoconsole
     src/runner.rs        starting, statuses, terminal output
+    src/usage.rs         CPU, memory and GPU usage
+    src/foreign.rs       servers started outside the manager
     src/ports.rs         listening ports and program names
     src/portbook.rs      port memory
     src/text.rs          output parsing: server address, exit reason

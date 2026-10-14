@@ -11,6 +11,20 @@ import { api, errText, on } from './ipc.js'
 import { IDLE, applyAccent, endedItself, isActive, isAlive, plural } from './constants.js'
 
 const byId = (list) => Object.fromEntries(list.map(v => [v.id, v]))
+/**
+ * Запуски мимо менеджера по способу запуска. Их может быть несколько (сервер и его база, две копии):
+ * строка показывает первый, а порты и число процессов — по всем. Остановка гасит все.
+ */
+function groupForeign(list) {
+  const out = {}
+  for (const f of list) {
+    const g = out[f.id]
+    out[f.id] = g
+      ? { ...g, runs: g.runs + 1, pids: [...g.pids, ...f.pids], ports: [...new Set([...g.ports, ...f.ports])].sort((a, b) => a - b) }
+      : { ...f, runs: 1 }
+  }
+  return out
+}
 /** Завершение раньше этого срока после запуска считаем неудавшимся запуском. */
 const QUICK_EXIT_MS = 20000
 const BUSY_MIN_MS = 400
@@ -19,6 +33,10 @@ export default function App() {
   const [config, setConfig] = useState(null)
   const [procs, setProcs] = useState({})
   const [info, setInfo] = useState(null)
+  // Расход ресурсов по репозиториям: ядро присылает его, пока окно на экране.
+  const [usage, setUsage] = useState({ totalMem: 0, projects: {} })
+  // Серверы из списка, запущенные мимо менеджера: из своего терминала, двойным щелчком по .bat.
+  const [foreign, setForeign] = useState({})
   // Серверы, над которыми прямо сейчас выполняется действие: их кнопки заперты.
   const [busy, setBusy] = useState(() => new Set())
   const [logId, setLogId] = useState(null)
@@ -58,6 +76,8 @@ export default function App() {
     }
     const offs = [
       on('procs', onProcs),
+      on('usage', setUsage),
+      on('foreign', list => setForeign(groupForeign(list))),
       on('ask-quit', () => setQuitting(true)),
     ]
     Promise.all([api.config(), api.procs(), api.info()])
@@ -72,6 +92,7 @@ export default function App() {
         if (about.loadError) say(about.loadError, true)
       })
       .catch(e => say(errText(e), true))
+    api.foreign().then(list => setForeign(groupForeign(list))).catch(() => {})
     return () => offs.forEach(off => off())
   }, [say])
 
@@ -105,6 +126,8 @@ export default function App() {
     restart: (id) => run(id, api.restart),
     pause: (id) => run(id, api.pause),
     resume: (id) => run(id, api.resume),
+    stopForeign: (id) => run(id, api.stopForeign),
+    restartForeign: (id) => run(id, api.restartForeign),
     startAll: () => guard(async () => {
       const failed = await api.startAll()
       if (failed) say('Не запустилось: ' + failed + '. Причина видна в терминале сервера', true)
@@ -179,7 +202,7 @@ export default function App() {
         </div>
 
         <div className="screen">
-          {screen === 'home' && <Home config={config} procs={procs} busy={busy} logId={logId} act={act} />}
+          {screen === 'home' && <Home config={config} procs={procs} usage={usage} foreign={foreign} busy={busy} logId={logId} act={act} />}
           {screen === 'ports' && <Ports say={say} />}
         </div>
 

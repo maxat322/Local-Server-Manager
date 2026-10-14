@@ -9,9 +9,10 @@ use std::{ffi::c_void, io, mem, ptr};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HANDLE},
     System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicProcessIdList,
-        JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
-        TerminateJobObject, JOBOBJECT_BASIC_PROCESS_ID_LIST, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation,
+        JobObjectBasicProcessIdList, JobObjectExtendedLimitInformation, QueryInformationJobObject,
+        SetInformationJobObject, TerminateJobObject, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
+        JOBOBJECT_BASIC_PROCESS_ID_LIST, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     },
 };
@@ -88,6 +89,25 @@ impl Job {
             }
             let first = ptr::addr_of!((*list).ProcessIdList) as *const usize;
             std::slice::from_raw_parts(first, count.min(MAX_PIDS)).iter().map(|&pid| pid as u32).collect()
+        }
+    }
+}
+
+impl Job {
+    /// Процессорное время всего дерева с момента запуска, в сотнях наносекунд.
+    /// Задание помнит и время уже завершившихся процессов: короткие потомки не теряются.
+    pub fn cpu_time(&self) -> u64 {
+        // SAFETY: структура обнулена и передана с собственным размером.
+        unsafe {
+            let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = mem::zeroed();
+            let ok = QueryInformationJobObject(
+                self.0,
+                JobObjectBasicAccountingInformation,
+                &mut info as *mut _ as *mut c_void,
+                mem::size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
+                ptr::null_mut(),
+            );
+            if ok == 0 { 0 } else { (info.TotalUserTime + info.TotalKernelTime).max(0) as u64 }
         }
     }
 }

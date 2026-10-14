@@ -41,6 +41,27 @@ const logs = {}
 const copy = (v) => JSON.parse(JSON.stringify(v))
 const pushProcs = () => emit('procs', Object.values(procs))
 
+// Расход ресурсов: выдуманные, но живые цифры для всех репозиториев, где что-то запущено.
+const rnd = (from, to) => from + Math.random() * (to - from)
+setInterval(() => {
+  const projects = {}
+  for (const p of config.projects) {
+    const live = p.launchers
+      .map(l => (FOREIGN.some(f => f.id === l.id) ? 'running' : procs[l.id]?.status))
+      .filter(s => ['starting', 'running', 'paused'].includes(s))
+    if (!live.length) continue
+    const paused = live.every(s => s === 'paused')
+    const heavy = p.name === 'RAG-chat'
+    projects[p.id] = {
+      cpu: paused ? 0 : rnd(0.1, heavy ? 24 : 4),
+      mem: (paused ? rnd(2, 6) : rnd(180, 420) * live.length * (heavy ? 6 : 1)) * 1048576,
+      gpu: paused || !heavy ? 0 : rnd(20, 96),
+      vram: heavy ? rnd(5200, 5400) * 1048576 : 0,
+    }
+  }
+  emit('usage', { totalMem: 32 * 1024 ** 3, projects })
+}, 2000)
+
 /** Строка заглушки → кусок вывода терминала, каким его отдаёт настоящее ядро. */
 const chunk = (line) => ({
   n: line.n,
@@ -158,7 +179,20 @@ let PORTS = [
 
 let nextPort = 5173
 
+// Boom cats будто бы запущен из своего терминала: его порт держит чужой процесс.
+let FOREIGN = [{
+  id: config.projects[3].launchers[0].id, root: 9120, pids: [9120, 9121, 9124], name: 'node.exe', ports: [5174],
+  command: 'node C:\\Dev\\Boom cats\\node_modules\\vite\\bin\\vite.js',
+}]
+const dropForeign = (id) => {
+  FOREIGN = FOREIGN.filter(f => f.id !== id)
+  emit('foreign', copy(FOREIGN))
+}
+
 const handlers = {
+  get_foreign: () => copy(FOREIGN),
+  stop_foreign: ({ id }) => dropForeign(id),
+  restart_foreign: ({ id }) => { dropForeign(id); start(id, nextPort++) },
   get_config: () => copy(config),
   get_procs: () => Object.values(procs),
   app_info: () => ({ version: '0.1.0', dataDir: 'C:\\Users\\you\\AppData\\Roaming\\com.localservermanager.app', loadError: null }),

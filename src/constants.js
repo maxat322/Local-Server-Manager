@@ -73,6 +73,16 @@ export function statusText(view, now) {
   }
 }
 
+/** Объём памяти слитно, для строки расхода: 412МБ, 1.3ГБ. */
+export function fmtBytes(bytes) {
+  const mb = bytes / 1048576
+  if (mb < 1000) return Math.round(mb) + 'МБ'
+  return (mb / 1024).toFixed(1) + 'ГБ'
+}
+
+/** Проценты целыми: строке расхода важна величина, а не десятые. */
+export const fmtPct = (value) => Math.round(value) + '%'
+
 /** Момент времени коротко: сегодня — только часы, иначе с датой. */
 export function fmtWhen(ms) {
   if (!ms) return '—'

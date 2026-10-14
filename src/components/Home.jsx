@@ -16,12 +16,14 @@ function useNow(ticking) {
 }
 
 /** Главная отвечает на один вопрос: что сейчас запущено. */
-export default function Home({ config, procs, busy, logId, act }) {
+export default function Home({ config, procs, usage, foreign, busy, logId, act }) {
   const launchers = config.projects.flatMap(p => p.launchers)
   const running = launchers.filter(l => isActive(procs[l.id] || IDLE)).length
   // Приостановленные не работают, но и запускать их заново не нужно: у них свой счёт.
   const alive = launchers.filter(l => isAlive(procs[l.id] || IDLE)).length
   const paused = alive - running
+  // Запущенные мимо менеджера: считаем только те, что не работают в нём самом.
+  const elsewhere = launchers.filter(l => foreign[l.id] && !isAlive(procs[l.id] || IDLE)).length
   const now = useNow(running > 0)
 
   if (!config.projects.length) {
@@ -43,7 +45,7 @@ export default function Home({ config, procs, busy, logId, act }) {
   return (
     <>
       <div className="section-title">
-        <span>СЕРВЕРЫ · РАБОТАЕТ {running} ИЗ {launchers.length}{paused ? ' · НА ПАУЗЕ ' + paused : ''}</span>
+        <span>СЕРВЕРЫ · РАБОТАЕТ {running} ИЗ {launchers.length}{paused ? ' · НА ПАУЗЕ ' + paused : ''}{elsewhere ? ' · ВНЕ МЕНЕДЖЕРА ' + elsewhere : ''}</span>
         <span className="row" style={{ marginLeft: 'auto', gap: 6 }}>
           <button className="sm" disabled={alive === launchers.length} onClick={act.startAll}>Запустить все</button>
           <button className="sm danger" disabled={!alive} onClick={act.stopAll}>Остановить все</button>
@@ -55,7 +57,10 @@ export default function Home({ config, procs, busy, logId, act }) {
 
       <div className="card">
         {config.projects.map(p => (
-          <ProjectRow key={p.id} project={p} procs={procs} now={now} busy={busy} logId={logId} act={act} />
+          <ProjectRow
+            key={p.id} project={p} procs={procs} foreign={foreign} now={now} busy={busy} logId={logId} act={act}
+            usage={usage.projects[p.id]} totalMem={usage.totalMem}
+          />
         ))}
       </div>
     </>

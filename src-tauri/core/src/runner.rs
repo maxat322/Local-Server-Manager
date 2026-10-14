@@ -592,6 +592,15 @@ impl Runner {
         self.lock().iter().filter(|(_, p)| p.status.is_alive()).map(|(id, _)| id.clone()).collect()
     }
 
+    /// Задания живых серверов: по ним считается расход процессора, памяти и видеокарты.
+    pub fn live_jobs(&self) -> Vec<(String, Arc<Job>)> {
+        self.lock()
+            .iter()
+            .filter(|(_, p)| p.status.is_alive())
+            .filter_map(|(id, p)| Some((id.clone(), p.job.clone()?)))
+            .collect()
+    }
+
     /// Какому серверу принадлежит каждый процесс: для вкладки портов.
     pub fn owners(&self) -> HashMap<u32, String> {
         let jobs: Vec<(String, Arc<Job>)> =

@@ -6,6 +6,7 @@
 
 pub mod badge;
 pub mod config;
+pub mod foreign;
 pub mod freeze;
 pub mod job;
 pub mod portbook;
@@ -14,3 +15,4 @@ pub mod pty;
 pub mod runner;
 pub mod scan;
 pub mod text;
+pub mod usage;

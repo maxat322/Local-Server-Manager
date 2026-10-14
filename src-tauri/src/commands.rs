@@ -6,6 +6,7 @@
 use crate::{spec_of, tray, AppState};
 use lsm_core::{
     config::{same_path, Config, Project, Settings},
+    foreign::{self, Found},
     portbook::{worth_remembering, Sighting},
     ports,
     runner::{now_ms, Chunk, ProcView, Status},
@@ -18,7 +19,7 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -154,6 +155,60 @@ pub fn resume_launcher(state: State<'_, AppState>, id: String) -> Result<(), Str
 #[tauri::command(async)]
 pub fn start_all(state: State<'_, AppState>) -> usize {
     start_where(&state, |_| true)
+}
+
+/// Серверы из списка, запущенные мимо менеджера.
+#[tauri::command(async)]
+pub fn get_foreign(state: State<'_, AppState>) -> Vec<Found> {
+    state.refresh_foreign();
+    state.foreign()
+}
+
+/// Останавливает сервер, запущенный мимо менеджера: всё дерево его запуска.
+#[tauri::command(async)]
+pub fn stop_foreign(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
+    stop_elsewhere(&app, &state, &id).map(|_| ())
+}
+
+/// Перезапуск сервера, запущенного мимо менеджера: тот запуск гасится, а сервер поднимается
+/// уже здесь, со встроенным терминалом и кнопками.
+#[tauri::command(async)]
+pub fn restart_foreign(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let spec = state.spec(&id).ok_or("Способ запуска не найден")?;
+    stop_elsewhere(&app, &state, &id)?;
+    state.runner.start(&spec).map_err(capitalize)
+}
+
+/// Сколько ждать, пока порты остановленного запуска освободятся.
+const PORTS_RELEASE: Duration = Duration::from_secs(5);
+
+fn stop_elsewhere(app: &AppHandle, state: &AppState, id: &str) -> Result<(), String> {
+    // Ищем заново прямо перед остановкой: номер процесса из прошлого поиска мог достаться другому.
+    state.refresh_foreign();
+    let found: Vec<Found> = state.foreign().into_iter().filter(|f| f.id == id).collect();
+    let mut held: Vec<u16> = Vec::new();
+    let mut result = Ok(());
+    for f in &found {
+        match foreign::kill_tree(f.root) {
+            Ok(_) => held.extend(&f.ports),
+            Err(e) => result = Err(e),
+        }
+    }
+    let deadline = Instant::now() + PORTS_RELEASE;
+    while result.is_ok() && !held.is_empty() {
+        let open: Vec<u16> = ports::listening().into_iter().map(|(_, port)| port).collect();
+        held.retain(|port| open.contains(port));
+        if held.is_empty() {
+            break;
+        }
+        if Instant::now() >= deadline {
+            result = Err(format!("Процессы остановлены, но порт {} всё ещё занят", held[0]));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    state.refresh_foreign();
+    let _ = app.emit("foreign", &state.foreign());
+    result
 }
 
 #[tauri::command(async)]
@@ -313,12 +368,15 @@ pub fn start_marked(app: &AppHandle) {
 }
 
 fn start_where(state: &AppState, pick: impl Fn(bool) -> bool) -> usize {
+    // Сервер, уже запущенный мимо менеджера, второй раз не поднимаем: копия упёрлась бы в его порт.
+    state.refresh_foreign();
+    let elsewhere: Vec<String> = state.foreign().into_iter().map(|f| f.id).collect();
     let specs: Vec<_> = state
         .config()
         .projects
         .iter()
         .flat_map(|p| p.launchers.iter())
-        .filter(|l| pick(l.autostart))
+        .filter(|l| pick(l.autostart) && !elsewhere.contains(&l.id))
         .map(spec_of)
         .collect();
     specs.iter().filter(|spec| state.runner.start(spec).is_err()).count()

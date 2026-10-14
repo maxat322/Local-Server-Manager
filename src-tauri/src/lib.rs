@@ -8,11 +8,14 @@ mod tray;
 
 use lsm_core::{
     config::{self, Config, Launcher, Project},
+    foreign::{self, Found, Target},
     portbook::PortBook,
     runner::{Output, ProcView, Runner, Sink, Spec},
+    usage::{self, Sampler, Usage},
 };
+use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{Arc, Mutex, MutexGuard, OnceLock},
     time::{Duration, Instant},
@@ -29,6 +32,18 @@ const AUTOSTART_ARG: &str = "--autostart";
 /// Как часто заглядывать в таблицу портов, чтобы запомнить новые. Вкладка портов при открытии
 /// обновляется сама и чаще: это фоновая память на случай, когда её никто не смотрит.
 const PORT_WATCH: Duration = Duration::from_secs(20);
+/// Как часто замерять расход процессора, памяти и видеокарты, пока окно на экране.
+const USAGE_EVERY: Duration = Duration::from_secs(2);
+/// Поиск запусков мимо менеджера идёт через столько замеров: он дороже, а спешить ему некуда.
+const FOREIGN_EVERY_TICKS: u32 = 2;
+
+/// Расход ресурсов по репозиториям: событие `usage` для главной.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageReport {
+    total_mem: u64,
+    projects: HashMap<String, Usage>,
+}
 
 pub struct AppState {
     config: Mutex<Config>,
@@ -38,6 +53,8 @@ pub struct AppState {
     pub load_error: Option<String>,
     /// Память о портах и время, когда её последний раз писали на диск.
     pub ports: Mutex<(PortBook, Instant)>,
+    /// Серверы из списка, запущенные мимо менеджера: по последнему поиску.
+    foreign: Mutex<Vec<Found>>,
 }
 
 impl AppState {
@@ -81,6 +98,61 @@ impl AppState {
     /// Подписи серверов по идентификатору способа запуска.
     pub fn labels(&self) -> HashMap<String, String> {
         self.labels_in_order().into_iter().collect()
+    }
+
+    /// Задания живых серверов с репозиторием каждого: расход считается на репозиторий целиком.
+    fn jobs_by_project(&self) -> Vec<(String, Arc<lsm_core::job::Job>)> {
+        let project_of: HashMap<String, String> = {
+            let cfg = self.config();
+            cfg.projects.iter().flat_map(|p| p.launchers.iter().map(|l| (l.id.clone(), p.id.clone()))).collect()
+        };
+        self.runner
+            .live_jobs()
+            .into_iter()
+            .filter_map(|(id, job)| Some((project_of.get(&id)?.clone(), job)))
+            .collect()
+    }
+
+    /// Процессы серверов, запущенных мимо менеджера, по репозиториям: их расход тоже показывается.
+    fn foreign_by_project(&self) -> Vec<(String, Vec<u32>)> {
+        let project_of: HashMap<String, String> = {
+            let cfg = self.config();
+            cfg.projects.iter().flat_map(|p| p.launchers.iter().map(|l| (l.id.clone(), p.id.clone()))).collect()
+        };
+        self.foreign()
+            .into_iter()
+            .filter_map(|f| Some((project_of.get(&f.id)?.clone(), f.pids)))
+            .collect()
+    }
+
+    /// Ищет заново серверы из списка, запущенные мимо менеджера. Ищутся только те, что сейчас
+    /// не работают в самом менеджере. Возвращает, изменился ли список.
+    pub fn refresh_foreign(&self) -> bool {
+        let alive: HashSet<String> = self.runner.active_ids().into_iter().collect();
+        let targets: Vec<Target> = {
+            let cfg = self.config();
+            cfg.projects
+                .iter()
+                .flat_map(|p| {
+                    p.launchers
+                        .iter()
+                        .filter(|l| !alive.contains(&l.id))
+                        .map(|l| Target { id: l.id.clone(), paths: vec![l.cwd.clone(), p.path.clone()] })
+                })
+                .collect()
+        };
+        let exclude: HashSet<u32> = self.runner.owners().into_keys().collect();
+        let found = foreign::detect(&targets, &exclude);
+        let mut cache = self.foreign.lock().unwrap_or_else(|e| e.into_inner());
+        if *cache == found {
+            return false;
+        }
+        *cache = found;
+        true
+    }
+
+    pub fn foreign(&self) -> Vec<Found> {
+        self.foreign.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn ports_file(&self) -> PathBuf {
@@ -180,7 +252,14 @@ pub fn run() {
     // Состояние регистрируется до запуска окна: страница может обратиться к нему
     // раньше, чем отработает `setup`.
     let ports = PortBook::load(&dir.join("ports.json"));
-    let state = AppState { config: Mutex::new(cfg), dir, runner, load_error, ports: Mutex::new((ports, Instant::now())) };
+    let state = AppState {
+        config: Mutex::new(cfg),
+        dir,
+        runner,
+        load_error,
+        ports: Mutex::new((ports, Instant::now())),
+        foreign: Mutex::new(Vec::new()),
+    };
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -210,6 +289,39 @@ pub fn run() {
             std::thread::spawn(move || loop {
                 commands::scan_ports(&watcher.state::<AppState>());
                 std::thread::sleep(PORT_WATCH);
+            });
+
+            let meter = handle.clone();
+            std::thread::spawn(move || {
+                let mut sampler = Sampler::new();
+                let total_mem = usage::total_memory();
+                let mut tick: u32 = 0;
+                // Что окно уже знает о запусках мимо менеджера. Сравниваем с ним, а не с прошлым
+                // поиском: искать могут и команды (например, «запустить все»), не сообщая окну.
+                let mut known: Vec<Found> = Vec::new();
+                loop {
+                    std::thread::sleep(USAGE_EVERY);
+                    // В трее цифры никто не видит: замеры не должны стоить ресурсов сами.
+                    let shown = meter.get_webview_window(MAIN_WINDOW).is_some_and(|w| {
+                        w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)
+                    });
+                    if !shown {
+                        continue;
+                    }
+                    let state = meter.state::<AppState>();
+                    let jobs = state.jobs_by_project();
+                    let loose = state.foreign_by_project();
+                    let _ = meter.emit("usage", &UsageReport { total_mem, projects: sampler.sample(&jobs, &loose) });
+                    tick = tick.wrapping_add(1);
+                    if tick % FOREIGN_EVERY_TICKS == 0 {
+                        state.refresh_foreign();
+                        let now = state.foreign();
+                        if now != known {
+                            let _ = meter.emit("foreign", &now);
+                            known = now;
+                        }
+                    }
+                }
             });
 
             std::thread::spawn(move || commands::start_marked(&handle));
@@ -249,6 +361,9 @@ pub fn run() {
             commands::term_input,
             commands::term_resize,
             commands::get_ports,
+            commands::get_foreign,
+            commands::stop_foreign,
+            commands::restart_foreign,
             commands::forget_port,
             commands::save_settings,
             commands::open_url,

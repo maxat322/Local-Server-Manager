@@ -1995,7 +1995,7 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "local-server-manager"
-version = "0.3.1"
+version = "0.5.1"
 dependencies = [
  "lsm-core",
  "serde",
@@ -2025,7 +2025,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lsm-core"
-version = "0.3.1"
+version = "0.5.1"
 dependencies = [
  "serde",
  "serde_json",

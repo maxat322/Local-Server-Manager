@@ -1,6 +1,6 @@
 [package]
 name = "local-server-manager"
-version = "0.3.1"
+version = "0.5.1"
 description = "Запуск и контроль локальных серверов разработки из трея"
 edition = "2021"
 
